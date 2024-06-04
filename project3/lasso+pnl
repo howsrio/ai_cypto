@@ -1,0 +1,94 @@
+#1
+library('stringr')
+library('glmnet')
+
+extract <- function(o, s) { 
+  index <- which(coef(o, s) != 0) 
+  data.frame(name=rownames(coef(o))[index], coef=coef(o, s)[index]) 
+}
+
+library(readr)
+data <- read_csv("2024-05-01T000000-2024-05-01T235900-upbit-BTC-filtered-5-2-mid5.csv")
+
+
+options(scipen=999)
+
+args<-commandArgs(TRUE)
+
+#args[1] s time
+#args[2] e time
+#args[3] exchange
+#args[4] 
+
+filtered = paste(args[1],args[2],args[3],args[4],'filtered-5-2',args[5],sep="-")
+model_file = paste(args[2],args[3],args[4],args[5],'lasso-5s-2std',sep='-')
+
+#return_file
+filtered <- str_remove_all(filtered,":")
+model_file <- str_remove_all(model_file,":")
+
+filtered = paste ("./", filtered, ".csv", sep="")
+message(filtered)
+message(model_file)
+model_file = paste ("./", model_file, ".csv", sep="")
+
+#filtered = read.csv(filtered)
+filtered = data
+mid_std = sd(filtered$mid_price)
+message (round(mid_std,0))
+#print (round(mid_std[1],0))
+#print (mid_std)
+
+filtered_no_time_mid = subset(filtered, select=-c(mid_price,timestamp))
+
+y = filtered_no_time_mid$return
+x = subset(filtered_no_time_mid, select=-c(return))
+
+#quit()
+
+x<-as.matrix(x)
+#model_ols<-lm(y~x)
+#model_lasso<-glmnet(x,y)
+
+#cv_fit <- cv.glmnet(x=x, y=y, alpha=0, intercept=FALSE, lower.limits=0, nfolds=10) #ridge
+cv_fit <- cv.glmnet(x=x, y=y, alpha=1, intercept=FALSE, lower.limits=0, nfolds=5) #lasso
+coef(cv_fit)
+
+fit <- glmnet(x=x, y=y, alpha = 1, lambda=cv_fit$lambda.1se, intercept=FALSE, lower.limits=0,)
+coef(fit)
+
+df <- extract(fit, s=0.1)
+df <- t(df)
+# [,1]                     [,2]                     [,3]                   
+# name "book-delta-v1-0.2-10-1" "book-delta-v1-0.2-10-5" "book-delta-v1-0.2-2-1"
+# coef "0.00000137396182"       "0.00000771251141"       "0.00000467260116"     
+# [,4]                     [,5]                      [,6]                    
+# name "book-delta-v2-0.2-10-5" "book-imbalance-0.2-10-1" "book-imbalance-0.2-5-1"
+# coef "0.00000838991006"       "0.00000001287826"        "0.00000000364214"      
+# [,7]                               [,8]                              
+# name "trade-indicator-v1-0.2-5-1-power" "trade-indicator-v1-0.2-5-5-power"
+# coef "0.00008879782167"                 "0.00002457005782"                
+# [,9]                             
+# name "trade-indicator-v1-0.2-5-5-sqrt"
+# coef "0.00006967412133"              
+
+write.table(df, file=model_file, sep=",", col.names=FALSE, row.names=FALSE, quote=FALSE)
+
+
+
+
+#2
+
+#install.packages("dplyr")
+library(dplyr)
+library(tidyr)
+
+live_btc <- read_csv("ai-crypto-project-3-live-btc-krw.csv")
+#live_btc$quantity*live_btc$price - 1*live_btc$side
+pnl <- sum(live_btc$amount) #amount 합한것
+print(pnl) #-4750015
+
+buy = live_btc[live_btc$side == 0,]
+sell = live_btc[live_btc$side == 1,]
+pnl <- sum(sell$quantity*sell$price) - sum(buy$quantity*buy$price) -sum(live_btc$fee)  
+print(pnl)#-4737383
